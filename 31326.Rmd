@@ -1,0 +1,590 @@
+---
+title: "assign 3"
+author: "Ed Lu"
+date: "2023-12-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r environment}
+library(tidyselect)
+library(tidyr)
+library(httr)
+library(knitr)
+library(jsonlite)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(scales)
+library(MASS)
+library(tools)
+library(plotly)
+library(sf)
+library(lme4)
+library(brms)
+```
+
+```{r dataLoader, cache = TRUE}
+# Data Loader
+# Get Census Data
+census <- read.csv("census.csv")
+# Fetch the list of all police forces
+forces_response <- GET("https://data.police.uk/api/forces")
+forces_data <- fromJSON(rawToChar(forces_response$content))
+# Extract the IDs of all forces
+forces_ids <- forces_data$id
+# Initialize an empty list to store data
+all_forces_data <- list()
+# many local forces have incomplete/did not update stop and search data for the year 2023
+# we use data from 2020 to 2022 to ensure compeletness
+# month index generator function
+generate_monthly_dates <- function(start_year, end_year) {
+  start_date <- as.Date(paste0(start_year, "-01-01"))
+  end_date <- as.Date(paste0(end_year, "-12-31"))
+  all_dates <- seq(start_date, end_date, by = "month")
+  formatted_dates <- format(all_dates, "%Y-%m")
+  return(formatted_dates)
+}
+
+# Generate monthly dates from 2019 to 2022
+dates <- generate_monthly_dates(2020, 2022)
+
+for (force_id in forces_ids) {
+  for (date in dates) {
+    response <- GET(paste0("https://data.police.uk/api/stops-force?force=", force_id, "&date=", date))
+    
+    # Check if the response is valid and not empty
+    if (length(response$content) > 0 && http_status(response)$category != "client_error") {
+      force_data <- fromJSON(rawToChar(response$content), flatten = TRUE)
+      key <- paste(force_id, date, sep = "_")
+      all_forces_data[[key]] <- force_data
+    }
+  }
+}
+
+## Function to get all unique columns from the list of data frames
+get_all_columns <- function(data_list) {
+  unique_columns <- unique(unlist(lapply(data_list, colnames)))
+  return(unique_columns)
+}
+
+# Get all unique columns from the data
+all_columns <- get_all_columns(all_forces_data)
+# Function to standardize a data frame to have all columns
+standardize_df <- function(df, all_columns) {
+  # Add missing columns as NA
+  missing_columns <- setdiff(all_columns, names(df))
+  for (col in missing_columns) {
+    df[[col]] <- NA
+  }
+  # Order columns to match all_columns
+  df <- df[, all_columns]
+  return(df)
+}
+
+# Function to check if an element is a valid, non-empty dataframe
+is_valid_dataframe <- function(x) {
+  is.data.frame(x) && nrow(x) > 0
+}
+# Apply standardization to each data frame
+all_forces_data <- lapply(all_forces_data, function(x) {
+  if (is_valid_dataframe(x)) {
+    return(standardize_df(x, all_columns))
+  } else {
+    return(NULL)
+  }
+})
+# Remove NULL elements
+all_forces_data <- Filter(NROW, all_forces_data)
+
+# Combine all standardized data frames
+if (length(all_forces_data) > 0) {
+  combined_data <- do.call(rbind, all_forces_data)
+
+  # Extract file names and convert to title case
+  file_names <- names(all_forces_data)
+  formatted_names <- gsub("_.*", "", file_names)  # Remove everything after '_'
+  formatted_names <- gsub("-", " ", formatted_names)  # Replace '-' with space
+  formatted_names <- sapply(formatted_names, toTitleCase)  # Convert to title case
+
+  # Calculate the number of rows for each file and repeat the names accordingly
+  rows_per_file <- sapply(all_forces_data, nrow)
+  combined_data$force <- rep(formatted_names, times = rows_per_file)
+} else {
+  combined_data <- data.frame(matrix(ncol = length(all_columns), nrow = 0))
+  colnames(combined_data) <- all_columns
+}
+```
+
+```{r dataCleaning}
+# Combine all standardized data frames
+if (length(all_forces_data) > 0) {
+  combined_data <- do.call(rbind, all_forces_data)
+
+  # Extract file names and convert to title case
+  file_names <- names(all_forces_data)
+  formatted_names <- gsub("_.*", "", file_names)  # Remove everything after '_'
+  formatted_names <- gsub("-", " ", formatted_names)  # Replace '-' with space
+  formatted_names <- sapply(formatted_names, toTitleCase)  # Convert to title case
+
+  # Calculate the number of rows for each file and repeat the names accordingly
+  rows_per_file <- sapply(all_forces_data, nrow)
+  combined_data$force <- rep(formatted_names, times = rows_per_file)
+} else {
+  combined_data <- data.frame(matrix(ncol = length(all_columns), nrow = 0))
+  colnames(combined_data) <- all_columns
+}
+# Remove non-person searches, NULLs and irrelavent variables 
+combined_data <- combined_data %>%
+  filter(
+    involved_person = TRUE
+    ) %>%
+    select(!any_of(c("location", "operation", "operation_name", "self_defined_ethnicity", "location.street.name", "outcome_object.id", "location.street.id")))
+
+combined_data$officer_defined_ethnicity <- ifelse(combined_data$officer_defined_ethnicity == "Mixed", "Other", combined_data$officer_defined_ethnicity) %>% as.factor()
+
+```
+
+```{r}
+
+    
+combined_data$officer_defined_ethnicity <- ifelse(combined_data$officer_defined_ethnicity == "Mixed", "Other", combined_data$officer_defined_ethnicity)
+```
+
+```{r}
+filter(
+    !is.na(gender) 
+    & !is.na(officer_defined_ethnicity) 
+    & !is.na(age_range) 
+    & !is.na(gender)
+    & !is.na(outcome)
+    & !is.na(object_of_search)
+    & outcome != ""
+    & gender != "Other"
+    )
+
+```
+
+## Descriptive Statistics
+
+```{r descriptives}
+# Calculate the proportion for each object_of_search
+proportion_table <- combined_data %>%
+  filter(!is.na(object_of_search)) %>%
+  count(object_of_search) %>%
+  mutate(proportion = round(n*100 / sum(n), 2))
+
+# View the result
+print(proportion_table)
+
+```
+
+```{r}
+# Calculate the proportion for outcomes
+outcome_table <- combined_data %>%
+  filter(!is.na(outcome)
+         & outcome != ""
+         & !is.na(officer_defined_ethnicity)) %>%
+  group_by(officer_defined_ethnicity) %>%
+  count(outcome) %>%
+  mutate(proportion = n / sum(n))
+
+# View the result
+ggplot(outcome_table, aes(x = officer_defined_ethnicity, y = proportion, fill = outcome)) +
+  geom_bar(stat = "identity", position = position_stack(reverse = TRUE)) +
+  labs(title = "Proportion of Outcomes by Officer-Defined Ethnicity",
+       x = "Officer-Defined Ethnicity", y = "Proportion (%)",
+       fill = "Outcome") +
+  theme_minimal() +
+  scale_y_continuous(labels = scales::percent_format())
+```
+
+```{r}
+# Load spatial data 
+police_areas <- st_read("Police_Force_Areas_England_and_Wales.shp")
+police_areas <- police_areas %>% rename(froce = pfa16nm)
+# Merge your data with spatial data
+name_mapping <- list(
+  "Metropolitan" = "Metropolitan Police",
+  "North Wales" = "Gwent",  # Example, replace with correct mapping
+  # Add other mappings here
+)
+
+```
+
+## Descriptive Statistics
+
+```{r}
+
+```
+
+```{r}
+# 
+
+```
+
+In order to do this baseline comparison, we need to understand the racial demographics in England Wales and Northern Ireland,
+
+benchmark to the census-estimated population ratio
+
+Let $S$ be the matrix of search counts, where each row represents an ethnicity and each column represents a day. Let $W$ be the vector of weights for each ethnicity/age range. The search rate matrix $R$, where each element $R_{e, d}$​ represents the search rate for ethnicity / age range $e$ on day $d$, is given by:
+
+$$
+R = S \cdot diag\left(\frac{1}{W}\right)
+$$
+
+Here $diag\left(\frac{1}{W}\right)$ creates a diagonal matrix with the reciprocal of the weights on the diagonal, and the dot product $S \cdot diag\left(\frac{1}{W}\right)$ scales the search counts in $S$ by these reciprocals, yielding the search rates adjusted for each ethnicity/age range's population proportion.
+
+```{r Normalization}
+combined_data <- combined_data %>%
+  mutate(date = as.Date(ymd_hms(datetime)), year = year(date)) %>% ungroup()
+daily_counts <- combined_data %>% 
+  filter(!is.na(officer_defined_ethnicity)) %>%
+  count(date, officer_defined_ethnicity)
+# get demographic ratios 
+census_race <- gather(census, officer_defined_ethnicity, count, -age_range)
+# Calculate the total for each ethnicity
+census_race <- census_race %>%
+  group_by(officer_defined_ethnicity) %>%
+  summarise(total = sum(count))  
+
+# Merge with search number to get a weighted search rates
+daily_counts <- merge(daily_counts, census_race, by = "officer_defined_ethnicity")
+# Calculate standardized counts
+daily_counts$n <- (daily_counts$n / daily_counts$total) * 100
+
+```
+
+```{r}
+ggplot(daily_counts, aes(x = date, y = n, color = officer_defined_ethnicity)) +
+  geom_line() +
+  scale_x_date(
+    breaks = date_breaks("3 months"),
+    labels = date_format("%b %Y")
+  ) +
+  labs(
+    title = "Stop and Searches Rate per Day by Ethnicity (2020-2022)",
+    x = "Date",
+    y = "Stop and Searches Rates (%)",
+    color = "Ethnicity"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+daily_counts_age <- combined_data %>%
+  count(date, age_range)
+census_age <- gather(census, key = "race", value = "count", -age_range)
+
+# Calculate the total for each age range
+census_age <- census_age %>%
+  group_by(age_range) %>%
+  summarise(total = sum(count))
+# Merge with search number to get a weighted search rates
+daily_counts_age <- merge(daily_counts_age, census_age, by = "age_range")
+# Calculate standardized counts
+daily_counts_age$n <- (daily_counts_age$n / daily_counts_age$total) * 100
+
+```
+
+```{r}
+
+ggplot(daily_counts_age, aes(x = date, y = n, color = age_range)) +
+  geom_line() +
+  scale_x_date(
+    breaks = date_breaks("3 months"),
+    labels = date_format("%b %Y")
+  ) +
+  labs(
+    title = "Stop and Searches per Day by Gender (2020-2022)",
+    x = "Date",
+    y = "Number of Stop and Searches",
+    color = "age"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+ggplot(daily_counts_gender, aes(x = date, y = n, color = gender)) +
+  geom_line() +
+  scale_x_date(
+    breaks = date_breaks("3 months"),
+    labels = date_format("%b %Y")
+  ) +
+  labs(
+    title = "Stop and Searches per Day by Gender (2020-2022)",
+    x = "Date",
+    y = "Number of Stop and Searches",
+    color = "Gender"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+
+```
+
+```{r}
+
+```
+
+```{r}
+for (location in combined_data$location) {
+  if (is.na(location)) {
+    print(location)
+  }
+}
+for (operation in combined_data$operation_name) {
+  if (!is.na(operation)) {
+    print(operation)
+  }
+}
+```
+
+```{r}
+
+```
+
+measurement of
+
+```{r}
+
+
+```
+
+```{r}
+
+```
+
+```{r arrest}
+# Calculate hit rates and total searches
+arrestRate_master <- combined_data %>% 
+  mutate(outcome_binary = case_when(
+    outcome == "Arrest" ~ 1,
+    TRUE ~ 0
+  )) %>%
+  group_by(officer_defined_ethnicity, force) %>%
+  summarise(
+    arrest_Rate = mean(outcome_binary, na.rm = TRUE),
+    .groups = 'drop'
+  ) %>%
+  mutate(arrest_Rate = ifelse(is.na(arrest_Rate), 0, arrest_Rate))
+
+# Calculate hit rates and total searches
+totSearch_master <- combined_data %>%
+  group_by(officer_defined_ethnicity, force) %>%
+  summarise(
+    searches = n(), 
+    .groups = 'drop'
+  ) %>%
+  mutate(searches = ifelse(is.na(searches), 0, searches))
+
+arrestRate_master <-
+  arrestRate_master %>% 
+  filter(officer_defined_ethnicity %in% c("Asian", "Black", "Other", "White")) %>% 
+  spread(officer_defined_ethnicity, arrest_Rate, fill = 0) %>% 
+  rename(white_arrest_rate = White) %>% 
+  gather(minority_race, minority_arrest_rate, c(Asian, Black, Other)) %>%
+  arrange(force)
+
+totSearch_master <-
+  totSearch_master %>% 
+  spread(officer_defined_ethnicity, searches, fill = 0) %>%
+  rename(white_searches = White) %>%
+  gather(minority_race, minority_searches, c(Asian, Black, Other)) %>%
+  mutate(num_searches = minority_searches + white_searches) 
+
+# Merge the reshaped hit rates and total searches
+final_arrest_master <- merge(arrestRate_master, totSearch_master, by = c("force", "minority_race"))
+```
+
+```{r}
+arrest_rate_columns <- grep("arrest_rate$", names(arrestRate_master), value = TRUE)
+
+# Extract these columns and calculate the maximum value
+max_arrest_rate <- max(sapply(arrestRate_master[arrest_rate_columns], max, na.rm = TRUE))
+ggplot(final_arrest_master, aes(
+    x = white_arrest_rate,
+    y = minority_arrest_rate, 
+  )) +
+  geom_point(aes(size = num_searches), pch = 21) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  scale_x_continuous("White arrest rate", 
+    limits = c(0, max_arrest_rate + 0.01),
+    labels = scales::percent
+  ) +
+  scale_y_continuous("Minority arrest rate", 
+    limits = c(0, max_arrest_rate + 0.01),
+    labels = scales::percent
+  ) +
+  coord_fixed() +
+  theme_light() +
+  facet_grid(. ~ minority_race)
+```
+
+```{r hitRate}
+# Calculate hit rates and total searches
+hitRate_master <- combined_data %>% 
+  mutate(outcome_binary = case_when(
+    outcome == "Caution (simple or conditional)" ~ 0,
+    outcome == "A no further action disposal" ~ 0,
+    TRUE ~ 1
+  )) %>%
+  group_by(officer_defined_ethnicity, force) %>%
+  summarise(
+    hit_rate = mean(outcome_binary, na.rm = TRUE),
+    .groups = 'drop'
+  ) %>%
+  mutate(hit_rate = ifelse(is.na(hit_rate), 0, hit_rate))
+
+
+
+hitRate_master <-
+  hitRate_master %>% 
+  filter(officer_defined_ethnicity %in% c("Asian", "Black", "Other", "White")) %>% 
+  spread(officer_defined_ethnicity, hit_rate, fill = 0) %>% 
+  rename(white_hit_rate = White) %>% 
+  gather(minority_race, minority_hit_rate, c(Asian, Black, Other)) %>%
+  arrange(force)
+
+
+# Merge the reshaped hit rates and total searches
+final_master <- merge(hitRate_master, totSearch_master, by = c("force", "minority_race"))
+```
+
+```{r}
+# Find columns that end with "hit_rate"
+hit_rate_columns <- grep("hit_rate$", names(hitRate_master), value = TRUE)
+
+# Extract these columns and calculate the maximum value
+max_hit_rate <- max(sapply(hitRate_master[hit_rate_columns], max, na.rm = TRUE))
+ggplot(final_master, aes(
+    x = white_hit_rate,
+    y = minority_hit_rate, 
+  )) +
+  geom_point(aes(size = num_searches), pch = 21) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  scale_x_continuous("White hit rate", 
+    limits = c(0, max_hit_rate + 0.01),
+    labels = scales::percent
+  ) +
+  scale_y_continuous("Minority hit rate", 
+    limits = c(0, max_hit_rate + 0.01),
+    labels = scales::percent
+  ) +
+  coord_fixed() +
+  theme_light() +
+  facet_grid(. ~ minority_race)
+
+```
+
+```{r}
+hit_map <- final_arrest_master %>% filter(minority_race == "Black") %>% 
+  group_by(force) %>% summarise(stopArrestGap =  minority_arrest_rate/white_arrest_rate)
+merged_data <- merge(police_areas, hit_map, by.x = "force", by.y = "force")
+```
+
+```{r}
+unique(combined_data$force)
+unique(police_areas$froce)
+```
+
+## Poisson Generalized Linear Mixed Model
+
+```{r}
+combined_data$officer_defined_ethnicity <- as.factor(combined_data$officer_defined_ethnicity)
+combined_data$force <- as.factor(combined_data$force)
+# Setting 'White' as the reference level
+combined_data$officer_defined_ethnicity <- relevel(combined_data$officer_defined_ethnicity, ref = "White")
+# Applying contrast coding
+contrasts(combined_data$officer_defined_ethnicity) <- contr.treatment(levels(combined_data$officer_defined_ethnicity), base = 1)
+Reg_data <- combined_data %>% 
+  filter(!is.na(officer_defined_ethnicity)
+         &!is.na(age_range)) %>%
+  group_by(officer_defined_ethnicity, force, age_range) %>%
+  summarise(
+    stops_searches =  n(),
+    arrests = sum(outcome == "Arrest", na.rm = TRUE),
+    .groups = 'drop'
+  ) 
+```
+
+$$
+\begin{align*}
+S_{kj} &\sim \text{Poisson}(A_{kj}\lambda_{kj}) \\
+\log(\lambda_{kj}) &= \alpha + \mu_j + \beta_k + \epsilon_{kj} \\
+\beta_k &\sim N(0, \tau_\beta) \\
+\epsilon_{kj} &\sim N(0, \tau_\epsilon) \\
+\tau_\beta &= \frac{1}{\sigma^2_\beta}, \quad \tau_\epsilon = \frac{1}{\sigma^2_\epsilon}
+\end{align*}
+$$
+
+Where:
+
+-   $S_{k, j}$ is the number of police stop and searches in the $k$th police forces $(k = 1,...,39)$ of individuals of \$j\$th ethnicity $(j = 1,…,4)$
+
+-   $A_{k, j}$ is the number of arrest in the $k$th police forces of individuals of $j$th ethnicity
+
+-   $α$ is a overall intercept
+
+-   $μ_{j}$ *is an ethnicity intercept with* $μ_{4}$ = 0, therefore $μ_{j}$ is the difference from the white ethnic group
+
+-   $β_{k}$ is a random effect for $k$th police forces with precision $τ_{β}$
+
+-   $ε_{kj}$ is a random effect for $k$th police forces of individuals of $j$th ethnicity with precision $τ_{ε}$ for overdispersion
+
+```{r}
+# Fit Poisson GLMM
+glmm_model_simplified <- glmer(
+  stops_searches ~ arrests + officer_defined_ethnicity  + age_range + (1|force),
+  data = Reg_data,
+  family = poisson(link = "log")
+)
+
+```
+
+```{r}
+plot(glmm_model)
+```
+
+```{r}
+combined_data$time <- format(as.POSIXct(combined_data$datetime, format = "%Y-%m-%dT%H:%M:%S", tz = "UTC"), "%H")
+```
+
+```{r}
+min_counts <- combined_data %>%
+  count(time, officer_defined_ethnicity) 
+# Merge with search number to get a weighted search rates
+min_counts <- merge(min_counts, census_race, by = "officer_defined_ethnicity")
+# Calculate standardized counts
+min_counts$n <- (min_counts$n / min_counts$total) * 100
+min_counts$time <- as.POSIXct(min_counts$time, format = "%H")
+```
+
+```{r}
+ggplot(min_counts, aes(x = time, y = n, color = officer_defined_ethnicity)) +
+  geom_line() +
+  scale_x_datetime(
+    breaks = date_breaks("2 hour"),  # setting breaks for each hour
+    labels = date_format("%H")    # formatting labels to display hours and minutes
+  ) +
+  labs(
+    title = "Stop and Searches Rate Over Three Years by Ethnicity",
+    x = "Time (Hourly)",
+    y = "Number of Stop and Searches",
+    color = "Ethnicity"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r}
+check <- combined_data %>%  filter(outcome == "Caution (simple or conditional")
+unique(combined_data$outcome)
+```
