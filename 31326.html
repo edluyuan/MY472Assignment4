@@ -377,6 +377,7 @@ Police Stop and Searches in the United Kingdom</h1>
 in the <strong>Option 1</strong> of the paper. The github repo for this
 assignment can be found <a href="https://github.com/edluyuan/MY472Assignment4">here</a>. All codes,
 files, and data needed to replicate this assignment are included.</p>
+<p>Word Count: 739 words (excl. References)</p>
 <div id="introduction" class="section level2">
 <h2>Introduction</h2>
 <p>This UK study investigates potential biases in police stop-and-search
@@ -404,7 +405,7 @@ data.frame(
   Status = c(rep(&quot;Data Collected&quot;, length(all_forces_data)),
              rep(&quot;No Data&quot;, length(no_data_list)),
              rep(&quot;Failed Request&quot;, length(failed_requests_list)))
-) %&gt;%
+  ) %&gt;%
   # Count the number of occurrences of each unique status
   count(Status) %&gt;%
   # Add a new column &#39;Percentage&#39; showing the percentage of each status
@@ -837,7 +838,7 @@ data.frame(
   Status = c(rep(&quot;Data Collected&quot;, length(all_forces_data)),
              rep(&quot;No Data&quot;, length(no_data_list)),
              rep(&quot;Failed Request&quot;, length(failed_requests_list)))
-) %&gt;%
+  ) %&gt;%
   # Count the number of occurrences of each unique status
   count(Status) %&gt;%
   # Add a new column &#39;Percentage&#39; showing the percentage of each status

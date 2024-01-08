@@ -1,10 +1,3 @@
-base
-methods
-datasets
-utils
-grDevices
-graphics
-stats
 tidyselect
 tidyr
 httr
@@ -15,7 +8,6 @@ lubridate
 ggplot2
 scales
 MASS
-tools
 plotly
 Matrix
 lme4

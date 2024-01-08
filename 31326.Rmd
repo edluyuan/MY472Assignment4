@@ -15,7 +15,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Word Count: 739 words (excl. References)
 
-```{r environment, message=FALSE, include=FALSE, warning=FALSE, cache=TRUE}
+```{r environment, message=FALSE, include=FALSE, warning=FALSE}
 library(tidyselect)
 library(tidyr)
 library(httr)
@@ -173,7 +173,7 @@ data.frame(
   Status = c(rep("Data Collected", length(all_forces_data)),
              rep("No Data", length(no_data_list)),
              rep("Failed Request", length(failed_requests_list)))
-) %>%
+  ) %>%
   # Count the number of occurrences of each unique status
   count(Status) %>%
   # Add a new column 'Percentage' showing the percentage of each status
