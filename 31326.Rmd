@@ -13,7 +13,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 *Note:* This Assignment discuss the research question stated in the **Option 1** of the paper. The github repo for this assignment can be found [here](https://github.com/edluyuan/MY472Assignment4). All codes, files, and data needed to replicate this assignment are included.
 
-```{r environment, message=FALSE, include=FALSE, warning=FALSE}
+Word Count: 739 words (excl. References)
+
+```{r environment, message=FALSE, include=FALSE, warning=FALSE, cache=TRUE}
 library(tidyselect)
 library(tidyr)
 library(httr)
@@ -159,7 +161,7 @@ if (length(all_forces_data) > 0) {
 }
 ```
 
-we can see that over 85% of stop and search record are uploaded in our period of interest and there is no failed request from the completeness check script
+The study period saw over 85% of stop-and-search records successfully uploaded with no failures detected in data completeness.
 
 ```{r completenessCheck}
 # completeness check
@@ -178,9 +180,10 @@ data.frame(
   mutate(Percentage = n / sum(n) * 100) %>%
   # Select only the columns 'Status' and 'Percentage' for the final output
   select(Status, Percentage) 
+
 ```
 
-we can see that we have collected more than 1.4 million stop and search record
+more than 1.4 million search recorded
 
 ```{r}
 combined_data %>% nrow()
@@ -211,8 +214,6 @@ combined_data$officer_defined_ethnicity <- ifelse(
 
 ### Descriptive Statistics
 
-We first check the descriptive statistics of the data:
-
 #### Table 1: Proportion and count for search objects
 
 ```{r descriptivesObjects, echo=FALSE}
@@ -223,7 +224,7 @@ combined_data %>%
   mutate(proportion = round(n*100 / sum(n), 2)) # Calculate the proportion and round to 2 decimal places
 ```
 
-we can see that controlled drugs (62.55%) and offensive weapons (14.67%) are the most commonly searched items
+Controlled drugs (62.55%) and offensive weapons (14.67%) are the most commonly searched items
 
 #### Table 2: Proportion and count for search ethnicity
 
@@ -233,10 +234,9 @@ combined_data %>%
   filter(!is.na(officer_defined_ethnicity)) %>%
   count(officer_defined_ethnicity) %>%
   mutate(proportion = round(n*100 / sum(n), 2))  # View the result
-
 ```
 
-White (63.9%) has the most stop and search count as it is also the majority in England and Wales
+Whites, who form the majority in England and Wales, accounted for 63.9% of stop-and-search counts.
 
 ```{r descriptivesOutcome, echo=FALSE}
 # Calculate and visualize the proportion of outcomes by officer-defined ethnicity
@@ -261,7 +261,7 @@ For all ethinicity nearly 75% of the searches leads to no further action, but th
 
 ### Identify Biases
 
-In order to do this baseline comparison, we need to understand the racial demographics in England Wales and Northern Ireland by benchmark searches to the census-estimated population ratio
+To compare baselines, we need to understand the racial demographics by benchmark searches to the census-estimated population ratio
 
 #### Ethinicity
 
@@ -302,11 +302,7 @@ combined_data %>%
 
 ```
 
--   The "White" ethnicity has the lowest daily rate, staying relatively constant over time.
-
--   The "Black" ethnicity experiences significantly higher stop and search rates, with notable spikes suggesting instances of intensified police activity
-
--   The plot indicates a disparity in stop and search rates among different ethnicities, with the "Black" ethnicity being the most impacted.
+White individuals have the lowest and most consistent daily stop-and-search rates, while Black individuals face significantly higher rates, with spikes indicating periods of increased police activity.
 
 #### Age Range
 
@@ -347,13 +343,7 @@ combined_data %>%
 
 ```
 
--   The age group "25-34" has the highest rate of stop and searches, with noticeable daily fluctuations.
-
--   Age groups "10-17" and "18-24" show a moderate and similar rate
-
--   The "over 34" age group has a lower rate than the younger age groups but follows a similar pattern over time.
-
--   This suggests a focus on younger age demographics for stop and searches.
+The 25-34 age group experiences the highest rate of stop-and-searches with daily variations, while those over 34 have a lower rate.
 
 #### Gender
 
@@ -387,9 +377,9 @@ males experiencing the highest daily rates. Females and 'Other' genders had far 
 
 From October 2022 to January 2023 and April to July 2023, race impacted police stop-and-search rates more than age or gender, suggesting racial factors predominantly influence police searches.
 
-###  Measurement of Biases
+### Measurement of Biases
 
-Bias in police stop-and-search is defined by differing outcomes among groups. 'Hit rate' indicates the likelihood of outcomes more serious than 'no action' or 'simple caution,' and 'arrest rate' reflects the probability of arrest. Each bubble in our analysis represents the search count for a police authority in England and Wales.
+Bias in police stop-and-search is defined by differing outcomes among groups. 'Hit rate' indicates the likelihood of outcomes more serious than 'no action' or 'simple caution,' and 'arrest rate' reflects the probability of arrest. Each bubble in our analysis represents the search count for a police authority.
 
 ```{r arrest&hit, echo=FALSE}
 # Calculate arrest rates and hit rates for different ethnicities, then visualize
@@ -494,152 +484,194 @@ grid.arrange(hit, arrest, ncol = 1)
 
 ```
 
-Hit rate analysis shows minorities, especially Asian and Black individuals, face higher search outcomes than Whites. For arrest rates, minorities are arrested more frequently than Whites, suggesting bias in stop-and-search. Geographical differences in searches are measured using an index indicating search log-odds between Black and White individuals. An index above zero suggests higher search rates for Blacks, below zero for Whites, and equal at zero.
+Hit rate analysis reveals that Asian and Black minorities encounter higher search consequences than Whites, and they are also arrested more often, indicating potential stop-and-search bias. Geographic disparities are quantified by an index comparing search log-odds for Black versus White individuals; values above zero indicate a higher rate for Blacks, below zero for Whites, and zero denotes parity.
 
 ```{r, echo=FALSE}
 
-combined_data %>% 
-  group_by(officer_defined_ethnicity, force) %>% # group with race and force
-  summarise(searches = n(), .groups = "drop") %>% 
+# Visualize racial profiling in searches by location using a logarithmic index
+
+# Step 1: Grouping and Summarizing Search Data
+combined_data %>%
+  group_by(officer_defined_ethnicity, force) %>% # Group by officer ethnicity and force
+  summarise(searches = n(), .groups = "drop") %>% # Summarize total searches and drop grouping
+
+# Step 2: Merging with Census Data
   merge(census_race, by = "officer_defined_ethnicity") %>%
-  mutate(searches = searches*100/total) %>%
+  mutate(searches = searches*100/total) %>% # Calculate the percentage of searches per ethnicity
   select(!total) %>%
-  spread(officer_defined_ethnicity, searches, fill = 0) %>% 
+
+# Step 3: Reshaping Data for Visualization
+  spread(officer_defined_ethnicity, searches, fill = 0) %>% # Spread data into wide format
   select("force", "Black", "White") %>%
-  mutate(index = log(Black/White)) %>%
+  mutate(index = log(Black/White)) %>% # Calculate logarithmic index of Black to White search ratio
+
+# Step 4: Preparing Data for Plotting
   select(force, index) %>% 
-  mutate(force = fct_reorder(force, index)) %>%  # Reorder factor levels
+  mutate(force = fct_reorder(force, index)) %>%  # Reorder factor levels based on index
+
+# Step 5: Creating the Bar Plot
   ggplot(aes(x = force, y = index)) +
-    geom_bar(stat = "identity") +
-    geom_hline(yintercept = 0, colour = "red", linetype = "dashed") +
+    geom_bar(stat = "identity") + # Create bars for each force based on the index
+    geom_hline(yintercept = 0, colour = "red", linetype = "dashed") + # Add a dashed line at y = 0 for reference
+
+# Step 6: Adding Labels and Styling
     labs(
-    title = "Racial Profiling in Searches by Location (2020-2023)"
-  ) +
-    theme_minimal() +
-    coord_flip() # Flips the axes to have categories on the y-axis
+      title = "Racial Profiling in Searches by Location (2020-2023)"
+    ) +
+    theme_minimal() + # Minimalistic theme for clarity
+    coord_flip() # Flip the coordinates to have categories on the y-axis for better readability
+
   
 ```
 
--   **City Scale**: Larger cities such as London may have higher stop-and-search rates due to denser populations and more police presence.
+City Scale and Income Levels impact stop-and-search rates; larger cities like London, with denser populations, tend to have more, as do lower-income areas like Nottinghamshire, potentially due to higher crime rates.
 
--   **Income Levels**: Areas with lower income levels (e.g, Nottinghamshire) might experience higher stop-and-search rates if they are associated with higher crime rates, leading to increased police activity.
+### Generalized Linear Model
 
-### Generalized Linear Mixed Model
-
-We fit a Generalized Linear Mixed Model to the search rate data to identify key factors of biased searches.
+We fit a Generalized Linear Model to the search rate data to identify key factors of biased searches.
 
 ```{r, message=FALSE, include=FALSE, warning=FALSE}
-combined_data$officer_defined_ethnicity <- as.factor(combined_data$officer_defined_ethnicity)
-combined_data$force <- as.factor(combined_data$force)
-# Setting 'White' as the reference level
+# Prepare data for regression analysis with contrast coding and factor adjustments
+
+# Step 1: Converting to Factors
+combined_data$officer_defined_ethnicity <- as.factor(combined_data$officer_defined_ethnicity) # Convert officer ethnicity to factor
+combined_data$force <- as.factor(combined_data$force) # Convert force to factor
+
+# Step 2: Setting Reference Level
+# Set 'White' as the reference level for officer_defined_ethnicity
 combined_data$officer_defined_ethnicity <- relevel(combined_data$officer_defined_ethnicity, ref = "White")
-# Applying contrast coding
+
+# Step 3: Applying Contrast Coding
+# Apply treatment contrast coding with 'White' as the base level
 contrasts(combined_data$officer_defined_ethnicity) <- contr.treatment(levels(combined_data$officer_defined_ethnicity), base = 1)
+
+# Step 4: Preparing Regression Data
+# Filter out NA values in officer_defined_ethnicity and age_range
 Reg_data <- combined_data %>% 
-  filter(!is.na(officer_defined_ethnicity)
-         &!is.na(age_range)) %>%
+  filter(!is.na(officer_defined_ethnicity) & !is.na(age_range)) %>%
   group_by(officer_defined_ethnicity, force, age_range) %>%
   summarise(
-    stops_searches =  n(),
-    arrests = sum(outcome == "Arrest", na.rm = TRUE),
+    stops_searches = n(), # Count of stops and searches
+    arrests = sum(outcome == "Arrest", na.rm = TRUE), # Count of arrests
     .groups = 'drop'
   ) %>%
   merge(census_race, by = "officer_defined_ethnicity") %>%
-  mutate(test = stops_searches*1000/total)
+  mutate(test = stops_searches*1000/total) # Calculate stops and searches per 1000 individuals in each ethnicity
 ```
 
 $$
 \begin{align*}
-S_{kj} &\sim \text{NegativeBinomial}(A_{kj}\lambda_{kj}, \phi) \\
-\log(\lambda_{kj}) &= \alpha + \mu_j + \beta_k + \epsilon_{kj} \\
-\beta_k &\sim N(0, \tau_\beta) \\
-\epsilon_{kj} &\sim N(0, \tau_\epsilon) \\
-\tau_\beta &= \frac{1}{\sigma^2_\beta}, \quad \tau_\epsilon = \frac{1}{\sigma^2_\epsilon}
+S_{kji} &\sim \text{GLM}(\mu_{kji}) \\
+\log(\mu_{kji}) &= \alpha + X_{1j} + X_{2k} + X_{3i} \\
+X_{1j} &\sim \text{Categorical}(\text{Ethnicity}) \\
+X_{2k} &\sim \text{Categorical}(\text{Police Force}) \\
+X_{3i} &\sim \text{Categorical}(\text{Age Range})
 \end{align*}
 $$
 
 Where:
 
--   $S_{k, j}$ is the number of police stop and searches in the $k$th police forces $(k = 1,...,39)$ of individuals of \$j\$th ethnicity $(j = 1,…,4)$
+-   $S_{k, j, i}$ is the rate of stop and searches in the $k$th police forces $(k = 1,...,39)$ of individuals of $j$th ethnicity $(j = 1,…,4)$ of $i$ age range $(i = 1,...,4)$
 
--   $A_{k, j}$ is the number of arrest in the $k$th police forces of individuals of $j$th ethnicity
+-   $\mu_{kji}$ is the expected count of stops and searches, modeled as a function of ethnicity, police force, and age range.
 
 -   $α$ is a overall intercept
 
--   $μ_{j}$ *is an ethnicity intercept with* $μ_{4}$ = 0, therefore $μ_{j}$ is the difference from the white ethnic group
+-   $X_{1j}$ *is an ethnicity intercept with* $μ_{4}$ = 0, therefore $μ_{j}$ is the difference from the white ethnic group
 
--   $β_{k}$ is a random effect for $k$th police forces with precision $τ_{β}$
+-   $X_{2k}$ is a *effecr* for $k$th police forces
 
--   $ε_{kj}$ is a random effect for $k$th police forces of individuals of $j$th ethnicity with precision $τ_{ε}$ for overdispersion.
+-   $X_{3i}$ is a effect of $i$ age range
 
 ```{r, echo=FALSE}
-# Fit negbin GLMM
+# Fit a Generalized Linear Model (GLM)
 
+# Creating the GLM model
 glmm_model <- glm(
-  test ~ officer_defined_ethnicity + age_range  + force,
-  data = Reg_data
+  test ~ officer_defined_ethnicity + age_range + force, # Model formula including fixed effects
+  data = Reg_data # Dataset used for the model
 )
+
+# Display the summary of the model
 summary(glmm_model)
 
 
 ```
 
-We can see that `officer_defined_ethnicityBlack` *b* = 0.40 (*P* \< 0001), indicating black ethnicity is more searched at a higher rate (more bias) compare to white than other minorities which have insignificant effects. among all police force regions `forceMetropolitan` *b* = 4.44 (*P* \< 0001) indicates search rate are higher in London.
+The analysis shows that Black individuals are searched at a significantly higher rate than Whites (*b* = 0.40, *P* \< 0.001), indicating a bias. In the Metropolitan police force region, the search rate is notably higher (*b* = 4.44, *P* \< 0.001), especially in London.
 
 ### Decoding Biases: the **Veil of Darkness test**
 
-The analysis of hit and arrest rates offers a valuable method for benchmarking potential factors influencing stop-and-search decisions. However, this approach primarily establishes correlational relationships and often struggles to discern whether racial disparities in searches are due to racial profiling or other confounding factors. Moreover, the lack of a clear definition of a "successful" stop complicates the interpretation of these rates.
-
-To establish a causal relationship between race and stop-and-search decisions, we propose a "**Veil of Darkness**" test based on Grogger and Ridgeway's 2006 concept, aims to establish a causal link between race and police stop-and-search decisions. It posits that racial profiling is less likely in darkness, as identifying race becomes more challenging. A lower proportion of stops involving black individuals at night compared to daytime could indicate racial profiling during daylight.
+To establish a causal relationship between race and stop-and-search decisions, we propose a "**Veil of Darkness**" (VOD) test based on Grogger and Ridgeway's 2006 concept, aims to establish a causal link between race and police stop-and-search decisions. It posits that racial profiling is less likely in darkness, as identifying race becomes more challenging. A lower proportion of stops involving black individuals at night compared to daytime could indicate racial profiling during daylight.
 
 ```{r, echo=FALSE}
+# Convert datetime to just the hour component
 combined_data$time <- format(as.POSIXct(combined_data$datetime, format = "%Y-%m-%dT%H:%M:%S", tz = "UTC"), "%H")
+
+# Count occurrences by time and ethnicity
 combined_data %>%
   count(time, officer_defined_ethnicity) %>%
   merge(census_race, by = "officer_defined_ethnicity") %>%
+  # Calculate rates per ethnicity and convert time to POSIXct format
   mutate(n = n*100 /total, time = as.POSIXct(time, format = "%H")) %>%
+  # Create a line plot
   ggplot(aes(x = time, y = n, color = officer_defined_ethnicity)) +
-  geom_line() +
-  annotate("rect", xmin = as.POSIXct("00:00", format = "%H"), xmax = as.POSIXct("06:00", format = "%H"), ymin = -Inf, ymax = Inf, alpha = 0.2, fill = "grey") +
-  annotate("rect", xmin = as.POSIXct("16:00", format = "%H"), xmax = as.POSIXct("23:00", format = "%H"), ymin = -Inf, ymax = Inf, alpha = 0.2, fill = "grey") +
-  annotate("text", x = as.POSIXct("2:00", format = "%H"), y = Inf, label = "Night", vjust = 2, hjust = 0.5) +
-  annotate("text", x = as.POSIXct("21:00", format = "%H"), y = Inf, label = "Night", vjust = 2, hjust = 0.5) +
-  annotate("text", x = as.POSIXct("12:00", format = "%H"), y = Inf, label = "Day", vjust = 2, hjust = 0.5) +
-  scale_x_datetime(
-    breaks = as.POSIXct(c("02:00", "04:00", "06:00", "08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00"), format = "%H"),
-    labels = date_format("%H")
-  ) +
-  labs(
-    title = "Stop and Searches Rate Over Three Years by Ethnicity",
-    x = "Time (Hourly)",
-    y = "Stop and Searches Rates (%)",
-    color = "Ethnicity"
-  ) +
-  theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    geom_line() +
+    # Highlight night time periods with grey background
+    annotate("rect", xmin = as.POSIXct("00:00", format = "%H"), xmax = as.POSIXct("06:00", format = "%H"), ymin = -Inf, ymax = Inf, alpha = 0.2, fill = "grey") +
+    annotate("rect", xmin = as.POSIXct("16:00", format = "%H"), xmax = as.POSIXct("23:00", format = "%H"), ymin = -Inf, ymax = Inf, alpha = 0.2, fill = "grey") +
+    # Add text annotations for day and night
+    annotate("text", x = as.POSIXct("2:00", format = "%H"), y = Inf, label = "Night", vjust = 2, hjust = 0.5) +
+    annotate("text", x = as.POSIXct("21:00", format = "%H"), y = Inf, label = "Night", vjust = 2, hjust = 0.5) +
+    annotate("text", x = as.POSIXct("12:00", format = "%H"), y = Inf, label = "Day", vjust = 2, hjust = 0.5) +
+    # Set x-axis breaks and labels
+    scale_x_datetime(
+      breaks = as.POSIXct(c("02:00", "04:00", "06:00", "08:00", "10:00", "12:00", "14:00", "16:00", "18:00", "20:00", "22:00"), format = "%H"),
+      labels = date_format("%H")
+    ) +
+    # Labeling the plot
+    labs(
+      title = "Stop and Searches Rate Over Three Years by Ethnicity",
+      x = "Time (Hourly)",
+      y = "Stop and Searches Rates (%)",
+      color = "Ethnicity"
+    ) +
+    # Minimal theme and adjusting x-axis text angle
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
 ```
 
 -   higher stop and search rates during daylight hours, particularly for Black individuals.
 
 -   The disparity between day and night rates may imply potential bias in stop and search practices based on visibility of race.
 
-However this comparing daytime/nighttime stops is confounded, various factors, such as enforcement strategies and societal behaviors which correlates with clock time might also influence these rates. To account for such variables, we employ a comparison of stop rates during the \"inter-twilight period,\" which adjusts for natural light variations throughout the year. For England and Wales, Night begins at 4pm in the winter and 9pm in the summer. By concentrating on black and white individuals\' searches, we refine our analysis, the number of searches after filtering is given below, subsequently applying a logistic regression model to the filtered data. First lets see how may stop and searches are in the filtered data:
+The comparison of stops during day and night is complicated by factors like enforcement strategies and societal behavior, which vary with time. To control for these, we compare stops during the "inter-twilight period," adjusting for seasonal light changes. In England and Wales, nightfall is at 4pm in winter and 9pm in summer. Focusing on Black and White individuals' searches sharpens our analysis. After filtering, we apply logistic regression to the refined dataset to examine stop-and-search frequency.
 
 ```{r, echo=FALSE}
+# Subset combined_data to keep specific columns for analysis
 vod_stops <- combined_data %>%
-  select(datetime, officer_defined_ethnicity, force) %>%
+  select(datetime, officer_defined_ethnicity, force) %>%  # Selecting only datetime, ethnicity, and force columns
   
+  # Filter for rows where ethnicity is either Black or White
   filter(officer_defined_ethnicity %in% c("Black", "White")) %>%
+  # Creating new variables
   mutate(
-    month = month(as.Date(substr(datetime, 1, 10))),
-    time = hour(hms(substr(datetime, 12, 19))),
-    is_dark = ifelse(month %in% c(1, 2, 12), TRUE, FALSE),
-    is_black = ifelse(officer_defined_ethnicity == "Black", TRUE, FALSE)
-  )%>%
+    month = month(as.Date(substr(datetime, 1, 10))), # Extracting month from datetime
+    time = hour(hms(substr(datetime, 12, 19))), # Extracting hour from datetime
+    is_dark = ifelse(month %in% c(1, 2, 12), TRUE, FALSE), # Flag for dark months (Jan, Feb, Dec)
+    is_black = ifelse(officer_defined_ethnicity == "Black", TRUE, FALSE) # Flag for Black ethnicity
+  ) %>%
+  # Filter for rows in specified months (Jan, Feb, Jun, Jul, Aug, Dec)
   filter(month %in% c(1, 2, 6, 7, 8, 12)) %>%
+  # Filter for rows within the specified time range (4 PM to 9 PM)
   filter(time %in% 16:21) %>%
+  # Merge with census_race data based on officer_defined_ethnicity
   merge(census_race, by = "officer_defined_ethnicity")
+
+# Count the number of rows in the filtered dataset
 vod_stops %>% nrow()
+
 ```
 
 $$
@@ -659,64 +691,84 @@ $$
 -   $γ_j$ are the coefficients for the factor levels of **`force`**, with the indicator function $I$ being 1 if the condition is true (if the observation is in force $j$) and 0 otherwise.
 
 ```{r}
+# Fit a Generalized Linear Model (GLM) using binomial family
 vod <- glm(
-  is_black ~ is_dark + splines::ns(time, df = 6) + as.factor(force),
-  family = binomial,
-  data = vod_stops
+  is_black ~ is_dark + splines::ns(time, df = 6) + as.factor(force), # Model formula
+  family = binomial, # Binomial family, appropriate for binary outcomes
+  data = vod_stops # Data source
 )
 
+# Extract and display the estimate and standard error for 'is_dark' (TRUE level) from the model summary
 summary(vod)$coefficients["is_darkTRUE", c("Estimate", "Std. Error")]
+
 ```
 
 A negative coefficient indicates that the cover of darkness reduces the probability of Black individuals being stopped. The small standard error around this coefficient reinforces its statistical significance, confirming the robustness of the finding. let see this effect in figures:
 
 ```{r, echo=FALSE}
+# Summer Plot
 summer <- vod_stops %>% 
+  # Filter for records during dark months (representing summer)
   filter(is_dark = TRUE) %>%
+  # Count occurrences by ethnicity and time
   count(officer_defined_ethnicity, time) %>% 
+  # Merge with census race data
   merge(census_race, by = "officer_defined_ethnicity") %>%
+  # Calculate rates per ethnicity
   mutate(n = n*100 /total) %>%
+  # Create a line plot
   ggplot(aes(x = time, y = n, color = officer_defined_ethnicity)) +
-  geom_line()+
-  scale_y_continuous(limits = c(0.0, 0.6)) +  # Set y-axis limits
-  labs(
-    title = "Summer",
-    x = "Time (Hourly)",
-    y = "Number of Stop and Searches",
-    color = "Ethnicity"
-  ) +
-  annotate("text", x = 18, y = Inf, label = "Day", vjust = 2, hjust = 0.5) +
-  theme_minimal()+
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    geom_line() +
+    # Set y-axis limits
+    scale_y_continuous(limits = c(0.0, 0.6)) +
+    # Add labels and titles
+    labs(
+      title = "Summer",
+      x = "Time (Hourly)",
+      y = "Number of Stop and Searches",
+      color = "Ethnicity"
+    ) +
+    # Add text annotation for "Day"
+    annotate("text", x = 18, y = Inf, label = "Day", vjust = 2, hjust = 0.5) +
+    # Use minimal theme and adjust x-axis text angle
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
+# Winter Plot
 winter <- vod_stops %>% 
+  # Filter for records during light months (representing winter)
   filter(is_dark == "FALSE") %>%
+  # Count occurrences by ethnicity and time
   count(officer_defined_ethnicity, time) %>% 
+  # Merge with census race data
   merge(census_race, by = "officer_defined_ethnicity") %>%
+  # Calculate rates per ethnicity
   mutate(n = n*100 /total) %>%
+  # Create a line plot
   ggplot(aes(x = time, y = n, color = officer_defined_ethnicity)) +
-  geom_line() +
-  scale_y_continuous(limits = c(0.0, 0.6)) +  # Set y-axis limits
-  labs(
-    title = "Winter",
-    x = "Time (Hourly)",
-    y = "Stop and Searches Rates (%)",
-    color = "Ethnicity"
-  ) +
-  annotate("rect", xmin = 16, xmax = 21, ymin = -Inf, ymax = Inf, alpha = 0.2, fill = "grey") +
-  theme_minimal()+
-  annotate("text", x = 18, y = Inf, label = "Night", vjust = 2, hjust = 0.5) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+    geom_line() +
+    # Set y-axis limits
+    scale_y_continuous(limits = c(0.0, 0.6)) +
+    # Add labels and titles
+    labs(
+      title = "Winter",
+      x = "Time (Hourly)",
+      y = "Stop and Searches Rates (%)",
+      color = "Ethnicity"
+    ) +
+    # Highlight evening hours with grey background
+    annotate("rect", xmin = 16, xmax = 21, ymin = -Inf, ymax = Inf, alpha = 0.2, fill = "grey") +
+    # Use minimal theme and adjust x-axis text angle
+    theme_minimal() +
+    # Add text annotation for "Night"
+    annotate("text", x = 18, y = Inf, label = "Night", vjust = 2, hjust = 0.5) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Arrange the winter and summer plots side by side
 grid.arrange(winter, summer, ncol = 2)
-
-
 ```
 
--   Disproportionate stop-and-search rates for Black individuals during daylight could indicate racial profiling.
-
--   A decrease in the rate disparity after dark supports the "Veil of Darkness" hypothesis, indicating racial biases are less operational at night.
-
--   The analysis underscores the need for further investigation into policing practices to address potential biases evident in the trends of stop-and-search incidents by race during varying light conditions.\
+Daytime stop-and-search disparities for Black individuals imply racial profiling, which seems to decrease at night, aligning with the VOD hypothesis. This necessitates a closer examination of police practices during varying light conditions.
 
 ## References:
 
